@@ -1,0 +1,198 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Visibility {
+  public
+  private
+}
+
+enum DocumentKind {
+  text
+  code
+  image
+  sheet
+}
+
+enum MealType {
+  breakfast
+  lunch
+  dinner
+  snack
+}
+
+enum MemoryType {
+  preference
+  goal
+  fact
+  routine
+  general
+}
+
+enum SourceType {
+  manual
+  app
+  device
+  barcode
+  conversation
+  profile
+  activity
+  inference
+}
+
+model User {
+  id                  String    @id @default(uuid()) @db.Uuid
+  email               String    @unique
+  name                String?   
+  dateOfBirth         String?    // changed from age to dateOfBirth
+  weight              String?   
+  height              String?   
+  mobileNumber        String?   
+  dietaryPreference   String?   
+  medicalConditions   Json? // string[]
+  foodLiking          Json? // string[]
+  foodDisliking       Json? // string[]
+  fitnessGoal         String?    // new
+  activityLevel       String?   // new
+  gender              String?    // new
+  refreshToken        String?   @db.Text
+  verified            Boolean   @default(false)
+  isNewUser           Boolean   @default(true)
+  onboardingCompleted Boolean   @default(false)
+  lastLoginAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  chats              Chat[]
+  waterIntakeLogs    WaterIntakeLog[]
+  caloriesIntakeLogs CaloriesIntakeLog[]
+  userMemories       UserMemory[]
+
+  @@map("User")
+}
+
+model Chat {
+  id         String     @id @default(uuid()) @db.Uuid
+  createdAt  DateTime
+  title      String     @db.Text
+  userId     String     @db.Uuid
+  visibility Visibility @default(private)
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id])
+  messages Message[]
+  votes    Vote[]
+  streams  Stream[]
+
+  @@map("Chat")
+}
+
+model Message {
+  id          String   @id @default(uuid()) @db.Uuid
+  chatId      String   @db.Uuid
+  role        String
+  parts       Json
+  attachments Json
+  createdAt   DateTime
+
+  // Relations
+  chat  Chat   @relation(fields: [chatId], references: [id])
+  votes Vote[]
+
+  @@map("Message")
+}
+
+// DEPRECATED: The following schema is deprecated and will be removed in the future.
+// Read the migration guide at https://chat-sdk.dev/docs/migration-guides/message-parts
+
+model Vote {
+  chatId    String  @db.Uuid
+  messageId String  @db.Uuid
+  isUpvoted Boolean
+
+  // Relations
+  chat    Chat    @relation(fields: [chatId], references: [id])
+  message Message @relation(fields: [messageId], references: [id])
+
+  @@id([chatId, messageId])
+  @@map("Vote")
+}
+
+model Stream {
+  id        String   @id @default(uuid()) @db.Uuid
+  chatId    String   @db.Uuid
+  createdAt DateTime
+
+  // Relations
+  chat Chat @relation(fields: [chatId], references: [id])
+
+  @@map("Stream")
+}
+
+model WaterIntakeLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  amount     Decimal  @db.Decimal(6, 2) // Amount in ml/oz
+  unit       String   @default("ml") @db.VarChar(8) // "ml" or "oz"
+  consumedAt DateTime // When the water was consumed
+  createdAt  DateTime @default(now()) // When the log entry was created
+  notes      String?  @db.Text // Optional notes (e.g., "with meal", "after workout")
+  source     String?  @default("manual") @db.VarChar(32) // How the entry was created: "manual", "app", "device"
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("WaterIntakeLog")
+}
+
+model CaloriesIntakeLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  calories   Decimal  @db.Decimal(8, 2) // Calories consumed
+  foodItem   String   @db.VarChar(128) // Name of food/dish
+  quantity   Decimal? @db.Decimal(6, 2) // Quantity consumed (e.g., 1.5)
+  unit       String?  @db.VarChar(32) // Unit of quantity (e.g., "cup", "piece", "gram")
+  mealType   String   @default("snack") @db.VarChar(32) // "breakfast", "lunch", "dinner", "snack"
+  carbs      Decimal? @db.Decimal(6, 2) // Carbohydrates in grams
+  proteins   Decimal? @db.Decimal(6, 2) // Proteins in grams
+  fats       Decimal? @db.Decimal(6, 2) // Fats in grams
+  consumedAt DateTime // When the food was consumed
+  createdAt  DateTime @default(now()) // When the log entry was created
+  notes      String?  @db.Text // Optional notes (e.g., "homemade", "restaurant")
+  source     String?  @default("manual") @db.VarChar(32) // How the entry was created: "manual", "app", "barcode"
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("CaloriesIntakeLog")
+}
+
+model UserMemory {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid
+  memoryContent   String   @db.Text // The actual memory/information about the user
+  memoryType      String   @default("general") @db.VarChar(32) // "preference", "goal", "fact", "routine", "general"
+  importanceScore Int      @default(5) // 1-10 scale for memory importance
+  tags            Json? // string[] - Tags for categorization and retrieval
+  source          String   @default("conversation") @db.VarChar(32) // "conversation", "profile", "activity", "inference"
+  isActive        Boolean  @default(true) // For soft deletion
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("UserMemory")
+}
