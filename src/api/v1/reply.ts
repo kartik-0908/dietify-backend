@@ -6,6 +6,7 @@ import { AuthenticatedRequest } from "../../types/user";
 import {
   AIMessageChunk,
   BaseMessageChunk,
+  HumanMessage,
   isAIMessageChunk,
 } from "@langchain/core/messages";
 const router = Router();
@@ -19,6 +20,7 @@ router.post(
     const msg = req.body.message;
     const threadId = req.body.threadId;
     const userId = req.user?.userId;
+    const image = req.body.image;
 
     if (!userId) {
       res.status(401).json({
@@ -73,7 +75,23 @@ router.post(
       },
     };
 
-    let inputMessage = { role: "user", content: msg };
+    let inputMessage = new HumanMessage(msg);
+    if (image) {
+      inputMessage = new HumanMessage({
+        content: [
+          {
+            type: "text",
+            text: msg,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: image,
+            },
+          },
+        ],
+      });
+    }
 
     try {
       // Stream the chunks to the client
@@ -89,7 +107,7 @@ router.post(
           console.log(
             `${message.getType()} MESSAGE TOOL CALL CHUNK: ${JSON.stringify(message)}`
           );
-        } else if(isAIMessageChunk(message as BaseMessageChunk)) {
+        } else if (isAIMessageChunk(message as BaseMessageChunk)) {
           const eventData = {
             id: Date.now(),
             type: "message",
