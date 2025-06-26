@@ -6,6 +6,7 @@ import {
 } from "../../types/user";
 import { authenticateToken } from "../../lib/auth";
 import { prisma } from "../../lib/prisma";
+import { console } from "inspector";
 const router = Router();
 
 // Complete Onboarding Route
@@ -143,6 +144,547 @@ router.post(
         success: false,
         message: "Internal server error. Please try again.",
       } as OnboardingResponse);
+    }
+  }
+);
+
+router.get(
+  "/calories",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.userId;
+      const { date } = req.query as { date?: string };
+      console.log(date)
+
+      // Validation
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
+      if (!date) {
+        res.status(400).json({
+          success: false,
+          message: "Date parameter is required. Use ?date=YYYY-MM-DD",
+        });
+        return;
+      }
+
+      // Validate date format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(date)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid date format. Use YYYY-MM-DD",
+        });
+        return;
+      }
+
+      // Parse the date and create date range for the entire day
+      const targetDate = new Date(date);
+      if (isNaN(targetDate.getTime())) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid date provided",
+        });
+        return;
+      }
+
+      // Create start and end of day in UTC
+      const startOfDay = new Date(targetDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      startOfDay.setMinutes(startOfDay.getMinutes() - 330);
+
+
+      const endOfDay = new Date(targetDate);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      endOfDay.setMinutes(startOfDay.getMinutes() - 330);
+
+      console.log(startOfDay, endOfDay);
+
+      // Get the total calories using aggregation
+      const result = await prisma.caloriesIntakeLog.aggregate({
+        where: {
+          userId: userId,
+          consumedAt: {
+            gte: startOfDay , // Adjust for timezone offset
+            lte: endOfDay,
+          },
+        },
+        _sum: {
+          calories: true,
+          carbs: true,
+          proteins: true,
+          fats: true,
+        },
+        _count: {
+          id: true,
+        },
+      });
+
+      const totalCalories = Number(result._sum.calories || 0);
+      const totalCarbs = Number(result._sum.carbs || 0);
+      const totalProteins = Number(result._sum.proteins || 0);
+      const totalFats = Number(result._sum.fats || 0);
+      const entryCount = result._count.id;
+      console.log("just before")
+
+      console.log(
+        `📊 Total calories for user ${userId} on ${date}: ${totalCalories} calories`
+      );
+
+      res.json({
+        success: true,
+        message: "Total calorie intake retrieved successfully",
+        data: {
+          date: date,
+          totalCalories: Math.round(totalCalories * 100) / 100,
+          totalMacros: {
+            carbs: Math.round(totalCarbs * 100) / 100,
+            proteins: Math.round(totalProteins * 100) / 100,
+            fats: Math.round(totalFats * 100) / 100,
+          },
+          entryCount: entryCount,
+        },
+      });
+    } catch (error) {
+      console.error("Get Total Calorie Intake Error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error. Please try again.",
+      });
+    }
+  }
+);
+
+router.get(
+  "/water",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.userId;
+      const { date } = req.query as { date?: string };
+      console.log("water :",date)
+
+      // Validation
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
+      if (!date) {
+        res.status(400).json({
+          success: false,
+          message: "Date parameter is required. Use ?date=YYYY-MM-DD",
+        });
+        return;
+      }
+
+      // Validate date format
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(date)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid date format. Use YYYY-MM-DD",
+        });
+        return;
+      }
+
+      // Parse the date and create date range for the entire day
+      const targetDate = new Date(date);
+      if (isNaN(targetDate.getTime())) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid date provided",
+        });
+        return;
+      }
+
+      // Create start and end of day in UTC
+      const startOfDay = new Date(targetDate);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      startOfDay.setMinutes(startOfDay.getMinutes() - 330); // Adjust for timezone offset
+
+      const endOfDay = new Date(targetDate);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      endOfDay.setMinutes(startOfDay.getMinutes() - 330); // Adjust for timezone offset
+
+      // Get all water intake logs for the date
+      const waterIntakeLogs = await prisma.waterIntakeLog.findMany({
+        where: {
+          userId: userId,
+          consumedAt: {
+            gte: startOfDay,
+            lte: endOfDay,
+          },
+        },
+        select: {
+          amount: true,
+          unit: true,
+        },
+      });
+
+      // Convert all amounts to ml for calculation
+      const convertToMl = (amount: number, unit: string): number => {
+        if (unit === "oz") {
+          return amount * 29.5735; // 1 oz = 29.5735 ml
+        }
+        return amount; // Already in ml
+      };
+
+      // Calculate totals
+      const totalMl = waterIntakeLogs.reduce((total, log) => {
+        return total + convertToMl(Number(log.amount), log.unit);
+      }, 0);
+
+      const totalOz = totalMl / 29.5735;
+      const totalLiters = totalMl / 1000;
+
+      // Calculate progress towards daily goal
+      const dailyGoalMl = 2000;
+      const progressPercentage = Math.min((totalMl / dailyGoalMl) * 100, 100);
+
+      console.log(
+        `💧 Total water intake for user ${userId} on ${date}: ${Math.round(totalMl)}ml`
+      );
+
+      res.json({
+        success: true,
+        message: "Total water intake retrieved successfully",
+        data: {
+          date: date,
+          totalIntake: {
+            ml: Math.round(totalMl),
+            oz: Math.round(totalOz * 100) / 100,
+            liters: Math.round(totalLiters * 100) / 100,
+          },
+          dailyGoal: {
+            ml: dailyGoalMl,
+            progress: Math.round(progressPercentage * 100) / 100,
+            achieved: progressPercentage >= 100,
+          },
+          entryCount: waterIntakeLogs.length,
+        },
+      });
+    } catch (error) {
+      console.error("Get Total Water Intake Error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error. Please try again.",
+      });
+    }
+  }
+);
+
+router.get(
+  "/calories/all",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.userId;
+      const { limit, offset } = req.query as {
+        limit?: string;
+        offset?: string;
+      };
+
+      // Validation
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
+      // Parse pagination parameters
+      const limitNum = limit ? parseInt(limit, 10) : 100; // Default limit of 100
+      const offsetNum = offset ? parseInt(offset, 10) : 0; // Default offset of 0
+
+      // Validate pagination parameters
+      if (limitNum < 1 || limitNum > 1000) {
+        res.status(400).json({
+          success: false,
+          message: "Limit must be between 1 and 1000",
+        });
+        return;
+      }
+
+      if (offsetNum < 0) {
+        res.status(400).json({
+          success: false,
+          message: "Offset must be 0 or greater",
+        });
+        return;
+      }
+
+      // Query all calorie intake logs for the user
+      const calorieIntakeLogs = await prisma.caloriesIntakeLog.findMany({
+        where: {
+          userId: userId,
+        },
+        select: {
+          id: true,
+          calories: true,
+          foodItem: true,
+          quantity: true,
+          unit: true,
+          mealType: true,
+          carbs: true,
+          proteins: true,
+          fats: true,
+          consumedAt: true,
+          createdAt: true,
+          notes: true,
+          source: true,
+        },
+        orderBy: {
+          consumedAt: "desc", // Most recent first
+        },
+        take: limitNum,
+        skip: offsetNum,
+      });
+
+      // Get total count for pagination info
+      const totalCount = await prisma.caloriesIntakeLog.count({
+        where: {
+          userId: userId,
+        },
+      });
+
+      // Calculate totals for summary
+      const allLogs = await prisma.caloriesIntakeLog.findMany({
+        where: { userId: userId },
+        select: {
+          calories: true,
+          carbs: true,
+          proteins: true,
+          fats: true,
+        },
+      });
+
+      const totals = allLogs.reduce(
+        (acc, log) => ({
+          calories: acc.calories + Number(log.calories),
+          carbs: acc.carbs + Number(log.carbs || 0),
+          proteins: acc.proteins + Number(log.proteins || 0),
+          fats: acc.fats + Number(log.fats || 0),
+        }),
+        { calories: 0, carbs: 0, proteins: 0, fats: 0 }
+      );
+
+      console.log(
+        `📊 Retrieved ${calorieIntakeLogs.length} calorie logs for user ${userId}`
+      );
+
+      res.json({
+        success: true,
+        message: "Calorie intake logs retrieved successfully",
+        data: {
+          logs: calorieIntakeLogs.map((log) => ({
+            id: log.id,
+            foodItem: log.foodItem,
+            calories: Number(log.calories),
+            quantity: log.quantity ? Number(log.quantity) : null,
+            unit: log.unit,
+            mealType: log.mealType,
+            macros: {
+              carbs: log.carbs ? Number(log.carbs) : null,
+              proteins: log.proteins ? Number(log.proteins) : null,
+              fats: log.fats ? Number(log.fats) : null,
+            },
+            consumedAt: log.consumedAt,
+            createdAt: log.createdAt,
+            notes: log.notes,
+            source: log.source,
+          })),
+          pagination: {
+            currentPage: Math.floor(offsetNum / limitNum) + 1,
+            totalPages: Math.ceil(totalCount / limitNum),
+            totalCount: totalCount,
+            limit: limitNum,
+            offset: offsetNum,
+            hasNext: offsetNum + limitNum < totalCount,
+            hasPrevious: offsetNum > 0,
+          },
+          summary: {
+            totalCalories: Math.round(totals.calories * 100) / 100,
+            totalMacros: {
+              carbs: Math.round(totals.carbs * 100) / 100,
+              proteins: Math.round(totals.proteins * 100) / 100,
+              fats: Math.round(totals.fats * 100) / 100,
+            },
+            totalEntries: totalCount,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get All Calorie Logs Error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error. Please try again.",
+      });
+    }
+  }
+);
+
+// Get all water intake logs for a user (ordered by most recent first)
+router.get(
+  "/water/all",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.userId;
+      const { limit, offset } = req.query as {
+        limit?: string;
+        offset?: string;
+      };
+
+      // Validation
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
+      // Parse pagination parameters
+      const limitNum = limit ? parseInt(limit, 10) : 100; // Default limit of 100
+      const offsetNum = offset ? parseInt(offset, 10) : 0; // Default offset of 0
+
+      // Validate pagination parameters
+      if (limitNum < 1 || limitNum > 1000) {
+        res.status(400).json({
+          success: false,
+          message: "Limit must be between 1 and 1000",
+        });
+        return;
+      }
+
+      if (offsetNum < 0) {
+        res.status(400).json({
+          success: false,
+          message: "Offset must be 0 or greater",
+        });
+        return;
+      }
+
+      // Query all water intake logs for the user
+      const waterIntakeLogs = await prisma.waterIntakeLog.findMany({
+        where: {
+          userId: userId,
+        },
+        select: {
+          id: true,
+          amount: true,
+          unit: true,
+          consumedAt: true,
+          createdAt: true,
+          notes: true,
+          source: true,
+        },
+        orderBy: {
+          consumedAt: "desc", // Most recent first
+        },
+        take: limitNum,
+        skip: offsetNum,
+      });
+
+      // Get total count for pagination info
+      const totalCount = await prisma.waterIntakeLog.count({
+        where: {
+          userId: userId,
+        },
+      });
+
+      // Calculate total water intake
+      const allLogs = await prisma.waterIntakeLog.findMany({
+        where: { userId: userId },
+        select: {
+          amount: true,
+          unit: true,
+        },
+      });
+
+      // Convert all amounts to ml for calculation
+      const convertToMl = (amount: number, unit: string): number => {
+        if (unit === "oz") {
+          return amount * 29.5735; // 1 oz = 29.5735 ml
+        }
+        return amount; // Already in ml
+      };
+
+      const totalMl = allLogs.reduce((total, log) => {
+        return total + convertToMl(Number(log.amount), log.unit);
+      }, 0);
+
+      const totalOz = totalMl / 29.5735;
+      const totalLiters = totalMl / 1000;
+
+      console.log(
+        `💧 Retrieved ${waterIntakeLogs.length} water intake logs for user ${userId}`
+      );
+
+      res.json({
+        success: true,
+        message: "Water intake logs retrieved successfully",
+        data: {
+          logs: waterIntakeLogs.map((log) => ({
+            id: log.id,
+            amount: Number(log.amount),
+            unit: log.unit,
+            amountInMl: Math.round(convertToMl(Number(log.amount), log.unit)),
+            amountInOz:
+              Math.round(
+                (convertToMl(Number(log.amount), log.unit) / 29.5735) * 100
+              ) / 100,
+            consumedAt: log.consumedAt,
+            createdAt: log.createdAt,
+            notes: log.notes,
+            source: log.source,
+          })),
+          pagination: {
+            currentPage: Math.floor(offsetNum / limitNum) + 1,
+            totalPages: Math.ceil(totalCount / limitNum),
+            totalCount: totalCount,
+            limit: limitNum,
+            offset: offsetNum,
+            hasNext: offsetNum + limitNum < totalCount,
+            hasPrevious: offsetNum > 0,
+          },
+          summary: {
+            totalIntake: {
+              ml: Math.round(totalMl),
+              oz: Math.round(totalOz * 100) / 100,
+              liters: Math.round(totalLiters * 100) / 100,
+            },
+            totalEntries: totalCount,
+            averagePerEntry: {
+              ml:
+                totalCount > 0
+                  ? Math.round((totalMl / totalCount) * 100) / 100
+                  : 0,
+              oz:
+                totalCount > 0
+                  ? Math.round((totalOz / totalCount) * 100) / 100
+                  : 0,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get All Water Intake Logs Error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error. Please try again.",
+      });
     }
   }
 );

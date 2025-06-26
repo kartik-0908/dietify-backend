@@ -54,18 +54,20 @@ enum SourceType {
 model User {
   id                  String    @id @default(uuid()) @db.Uuid
   email               String    @unique
-  name                String?   
-  dateOfBirth         String?    // changed from age to dateOfBirth
-  weight              String?   
-  height              String?   
-  mobileNumber        String?   
-  dietaryPreference   String?   
+  name                String?
+  dateOfBirth         String? // changed from age to dateOfBirth
+  weight              String?
+  height              String?
+  mobileNumber        String?
+  stepTarget          Int       @default(2000)
+  calorieTarget       Int       @default(2000)
+  dietaryPreference   String?
   medicalConditions   Json? // string[]
   foodLiking          Json? // string[]
   foodDisliking       Json? // string[]
-  fitnessGoal         String?    // new
-  activityLevel       String?   // new
-  gender              String?    // new
+  fitnessGoal         String? // new
+  activityLevel       String? // new
+  gender              String? // new
   refreshToken        String?   @db.Text
   verified            Boolean   @default(false)
   isNewUser           Boolean   @default(true)
