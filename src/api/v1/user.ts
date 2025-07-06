@@ -689,4 +689,295 @@ router.get(
   }
 );
 
+// Add this route to your existing router
+
+router.get(
+  "/profile",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.userId;
+
+      // Validation
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
+      // Get user profile from database
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          dateOfBirth: true,
+          weight: true,
+          height: true,
+          mobileNumber: true,
+          stepTarget: true,
+          calorieTarget: true,
+          dietaryPreference: true,
+          medicalConditions: true,
+          foodLiking: true,
+          foodDisliking: true,
+          fitnessGoal: true,
+          activityLevel: true,
+          gender: true,
+          verified: true,
+          isNewUser: true,
+          onboardingCompleted: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (!user) {
+        res.status(404).json({
+          success: false,
+          message: "User profile not found",
+        });
+        return;
+      }
+
+      // Calculate age from dateOfBirth if available
+      let age: number | null = null;
+      if (user.dateOfBirth) {
+        const birthDate = new Date(user.dateOfBirth);
+        const today = new Date();
+        age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+      }
+
+      console.log(`👤 Retrieved profile for user: ${user.email}`);
+
+      res.json({
+        success: true,
+        message: "User profile retrieved successfully",
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            personalInfo: {
+              name: user.name,
+              dateOfBirth: user.dateOfBirth,
+              age: age,
+              gender: user.gender,
+              mobileNumber: user.mobileNumber,
+            },
+            physicalInfo: {
+              height: user.height,
+              weight: user.weight,
+            },
+            healthInfo: {
+              medicalConditions: user.medicalConditions || [],
+              activityLevel: user.activityLevel,
+            },
+            dietaryInfo: {
+              dietaryPreference: user.dietaryPreference,
+              foodLiking: user.foodLiking || [],
+              foodDisliking: user.foodDisliking || [],
+            },
+            fitnessInfo: {
+              fitnessGoal: user.fitnessGoal,
+              stepTarget: user.stepTarget,
+              calorieTarget: user.calorieTarget,
+            },
+            accountInfo: {
+              verified: user.verified,
+              isNewUser: user.isNewUser,
+              onboardingCompleted: user.onboardingCompleted,
+              lastLoginAt: user.lastLoginAt,
+              createdAt: user.createdAt,
+              updatedAt: user.updatedAt,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get User Profile Error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error. Please try again.",
+      });
+    }
+  }
+);
+
+// Add this route to your existing router (after the GET /profile route)
+
+router.put(
+  "/profile",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.userId;
+      const updateData = req.body;
+
+      // Validation
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: "Authentication required",
+        });
+        return;
+      }
+
+      // Check if user exists
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!existingUser) {
+        res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+        return;
+      }
+
+      // Validate name if provided
+      if (updateData.name && typeof updateData.name !== 'string') {
+        res.status(400).json({
+          success: false,
+          message: "Name must be a string",
+        });
+        return;
+      }
+
+      // Validate mobile number if provided
+      if (updateData.mobileNumber && typeof updateData.mobileNumber !== 'string') {
+        res.status(400).json({
+          success: false,
+          message: "Mobile number must be a string",
+        });
+        return;
+      }
+
+      // Validate gender if provided
+      if (updateData.gender && !['Male', 'Female', 'Other', 'Prefer not to say'].includes(updateData.gender)) {
+        res.status(400).json({
+          success: false,
+          message: "Invalid gender value",
+        });
+        return;
+      }
+
+      // Validate date of birth if provided
+      if (updateData.dateOfBirth) {
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(updateData.dateOfBirth)) {
+          res.status(400).json({
+            success: false,
+            message: "Date of birth must be in YYYY-MM-DD format",
+          });
+          return;
+        }
+        
+        const birthDate = new Date(updateData.dateOfBirth);
+        if (isNaN(birthDate.getTime())) {
+          res.status(400).json({
+            success: false,
+            message: "Invalid date of birth",
+          });
+          return;
+        }
+      }
+
+      // Prepare update object with only allowed fields
+      const updateFields: any = {
+        updatedAt: new Date(),
+      };
+
+      // Add fields if they are provided in the request
+      if (updateData.name !== undefined) {
+        updateFields.name = updateData.name.trim();
+      }
+      if (updateData.mobileNumber !== undefined) {
+        updateFields.mobileNumber = updateData.mobileNumber.trim();
+      }
+      if (updateData.gender !== undefined) {
+        updateFields.gender = updateData.gender;
+      }
+      if (updateData.dateOfBirth !== undefined) {
+        updateFields.dateOfBirth = updateData.dateOfBirth;
+      }
+
+      // Update user profile
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: updateFields,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          dateOfBirth: true,
+          gender: true,
+          mobileNumber: true,
+          verified: true,
+          isNewUser: true,
+          onboardingCompleted: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      // Calculate age from dateOfBirth if available
+      let age: number | null = null;
+      if (updatedUser.dateOfBirth) {
+        const birthDate = new Date(updatedUser.dateOfBirth);
+        const today = new Date();
+        age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+          age--;
+        }
+      }
+
+      console.log(`✅ Profile updated for user: ${existingUser.email}`);
+
+      res.json({
+        success: true,
+        message: "Profile updated successfully",
+        data: {
+          user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            personalInfo: {
+              name: updatedUser.name,
+              dateOfBirth: updatedUser.dateOfBirth,
+              age: age,
+              gender: updatedUser.gender,
+              mobileNumber: updatedUser.mobileNumber,
+            },
+            accountInfo: {
+              verified: updatedUser.verified,
+              isNewUser: updatedUser.isNewUser,
+              onboardingCompleted: updatedUser.onboardingCompleted,
+              lastLoginAt: updatedUser.lastLoginAt,
+              createdAt: updatedUser.createdAt,
+              updatedAt: updatedUser.updatedAt,
+            },
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Update Profile Error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error. Please try again.",
+      });
+    }
+  }
+);
+
+
 module.exports = router;
