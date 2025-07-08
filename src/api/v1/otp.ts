@@ -195,6 +195,59 @@ router.post("/verify", async (req: Request, res: Response) => {
   try {
     const { identifier, otp, type } = req.body as VerifyOTPRequest;
 
+     const isDemoUser = identifier === "demo@abc.com" && otp === "000000";
+    
+    if (isDemoUser) {
+      console.log("🎯 Demo user login detected");
+      
+      // Get or create demo user
+      let user = await getUserByEmail(identifier);
+      if (!user) {
+        user = await createNewUser(identifier);
+        // Set demo user as not new for better UX
+        user = await updateUser(user.id, { isNewUser: false });
+      }
+
+      // Generate JWT tokens for demo user
+      const accessToken = generateAccessToken(user.id, user.email);
+      const refreshToken = generateRefreshToken(user.id, user.email);
+
+      // Hash and store refresh token in database
+      const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+
+      // Update user with verification and refresh token
+      user = await updateUser(user.id, {
+        verified: true,
+        lastLoginAt: new Date(),
+        refreshToken: hashedRefreshToken,
+      });
+
+      const isNewUser = user.isNewUser;
+      const needsOnboarding = !user.onboardingCompleted;
+
+      console.log(`✅ Demo user verified: ${identifier}`);
+
+      res.json({
+        success: true,
+        message: "Demo user verified successfully",
+        data: {
+          accessToken,
+          refreshToken,
+          user: {
+            id: user.id,
+            email: user.email,
+            verified: true,
+            isNewUser,
+            needsOnboarding,
+            onboardingCompleted: user.onboardingCompleted,
+            createdAt: user.createdAt,
+            lastLoginAt: user.lastLoginAt,
+          },
+        },
+      } as OTPResponse);
+      return;
+    }
+
     // Validation
     if (!identifier || !otp || !type || type !== "email" || otp.length !== 6) {
       res.status(400).json({
