@@ -4,13 +4,18 @@ import { Resend } from "resend";
 import bcrypt from "bcryptjs";
 import { OTPResponse, SendOTPRequest, VerifyOTPRequest } from "../../types/otp";
 import { prisma } from "../../lib/prisma";
-import { authenticateToken, generateAccessToken, generateRefreshToken, otpStorage, verifyRefreshToken } from "../../lib/auth";
+import {
+  authenticateToken,
+  generateAccessToken,
+  generateRefreshToken,
+  otpStorage,
+  verifyRefreshToken,
+} from "../../lib/auth";
 
 const router = Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // JWT Configuration
-
 
 // Helper functions
 const generateOTP = (): string => {
@@ -121,8 +126,6 @@ const sendOTPEmail = async (
   }
 };
 
-
-
 router.post("/send", async (req: Request, res: Response) => {
   try {
     console.log(req.body);
@@ -194,12 +197,13 @@ router.post("/send", async (req: Request, res: Response) => {
 router.post("/verify", async (req: Request, res: Response) => {
   try {
     const { identifier, otp, type } = req.body as VerifyOTPRequest;
+    console.log(identifier, otp, type);
 
-     const isDemoUser = identifier === "demo@abc.com" && otp === "000000";
-    
+    const isDemoUser = identifier === "demo@abc.com" && otp === "000000";
+
     if (isDemoUser) {
       console.log("🎯 Demo user login detected");
-      
+
       // Get or create demo user
       let user = await getUserByEmail(identifier);
       if (!user) {
