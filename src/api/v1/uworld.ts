@@ -99,6 +99,7 @@ export class JSONParser {
 router.post("/llm", async (req: Request, res: Response) => {
   try {
     const { presignedUrl, prompt, webhookUrl, docId } = req.body;
+    console.log("new request", webhookUrl, docId);
 
     // Validate required fields
     if (!presignedUrl) {
