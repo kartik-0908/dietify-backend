@@ -26,11 +26,14 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^2.0.15",
     "@langchain/core": "^0.3.57",
     "@langchain/langgraph": "^0.3.1",
     "@langchain/langgraph-checkpoint-postgres": "^0.0.5",
     "@langchain/openai": "^0.5.11",
     "@prisma/client": "^6.9.0",
+    "ai": "^5.0.15",
+    "axios": "^1.11.0",
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
