@@ -313,8 +313,8 @@ router.post("/llm", async (req: Request, res: Response) => {
       pageBuffers, 
       prompt,
       {
-        maxConcurrency: 3, // Adjust based on rate limits
-        model: "gpt-4o-mini" // Use a more reliable model
+        maxConcurrency: 5, // Adjust based on rate limits
+        model: "gpt-5-mini-2025-08-07" // Use a more reliable model
       }
     );
 
