@@ -117,6 +117,7 @@ router.post("/llm", async (req: Request, res: Response) => {
       });
       return;
     }
+    console.log('starting llm call')
 
     // Execute LLM call
     const { text } = await generateText({
@@ -138,6 +139,7 @@ router.post("/llm", async (req: Request, res: Response) => {
         },
       ],
     });
+    console.log('llm call finished')
 
     console.log("Raw AI response:", text);
 
