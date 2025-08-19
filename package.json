@@ -40,6 +40,7 @@
     "jsonwebtoken": "^9.0.2",
     "langchain": "^0.3.27",
     "langsmith": "^0.3.30",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.16.0",
     "resend": "^4.5.1",
     "uuid": "^10.0.0",
